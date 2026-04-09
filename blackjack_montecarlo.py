@@ -20,7 +20,6 @@ def prediction(policy):
         go to the goal (by playing)
         keep track of the states visited
         reach a terminal condition
-        then add the value to the states, so first state gets length of states visited  * 1 or 0 or -1, etc
         '''
         states_visited, goal = play_episode(policy)
         states_visited = set(states_visited) # for first visit mc
@@ -85,6 +84,6 @@ if __name__ == "__main__":
         ax.set_title(f'{ace}')
         plt.colorbar(im, ax=ax)
 
-    plt.suptitle('MC Policy Evaluation after 1000 episodes')
+    plt.suptitle('MC Policy Evaluation after 5000 episodes')
     plt.tight_layout()
     plt.show()

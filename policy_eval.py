@@ -17,7 +17,7 @@ def policy_eval(S, A, P, R, gamma, policy):
     theta = 1e-6
     V = np.zeros(S)
     while True:
-        prev = V.copy()
+        prev = V.copy() # copy potentially inefficient
         # loop over each state
         for v in range(0, S):
             total = 0

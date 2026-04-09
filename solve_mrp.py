@@ -1,3 +1,5 @@
+# Note: used LLMs to search up numpy syntax
+
 # imports
 import numpy as np
 
