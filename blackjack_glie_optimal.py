@@ -6,7 +6,7 @@ def optimize_glie():
     # 0 for twist, 1 for stick
     N = np.zeros((2, 10, 10, 2)) # useable ace, player_sum, dealer_card, action
     Q = np.zeros((2, 10, 10, 2)) # useable ace, player_sum, dealer_card, action
-    for episode in range(1, 1000000):
+    for episode in range(1, 2000000):
         epsilon = 1/episode
         
         shape = (2, 10, 10) # 200 total elements
@@ -70,42 +70,98 @@ def play_episode(policy, value_func):
             
 
 
-
 if __name__ == "__main__":
+    # From Claude
     Q = optimize_glie()
     
-    policy_optimal = np.argmax(Q, axis=3)
-    
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    
-    for i, ace in enumerate(['No Usable Ace', 'Usable Ace']):
-        ax = axes[i]
-        
-        # plot each cell manually as a colored rectangle
-        for p_idx in range(10):        # player sum 12-21
-            for d_idx in range(10):    # dealer card 1-10
-                action = policy_optimal[i, p_idx, d_idx]
-                color = '#4A90D9' if action == 1 else '#E84040'  # blue=stick, red=twist
-                rect = plt.Rectangle((d_idx, p_idx), 1, 1, 
-                                    facecolor=color, edgecolor='black', linewidth=0.8)
-                ax.add_patch(rect)
-        
-        ax.set_xlim(0, 10)
-        ax.set_ylim(0, 10)
-        ax.set_xticks(np.arange(10) + 0.5)
-        ax.set_xticklabels(np.arange(1, 11))
-        ax.set_yticks(np.arange(10) + 0.5)
-        ax.set_yticklabels(np.arange(12, 22))
-        ax.set_xlabel('Dealer Showing')
-        ax.set_ylabel('Player Sum')
-        ax.set_title(f'Optimal Policy - {ace}')
-        
-        # manual legend
-        from matplotlib.patches import Patch
-        legend = [Patch(facecolor='#4A90D9', label='Stick'),
-                  Patch(facecolor='#E84040', label='Twist')]
-        ax.legend(handles=legend, loc='upper right')
-    
-    plt.suptitle('GLIE Monte Carlo Control - Optimal Policy', fontsize=14)
+    policy_optimal = np.argmax(Q, axis=3)  # 0=twist, 1=stick
+
+    # Game-theoretic optimal policy (basic strategy, hit/stand only, no splits/doubles)
+    # 0 = twist/hit, 1 = stick/stand
+    # Axes: [usable_ace, player_sum_idx (0=12,...,9=21), dealer_card_idx (0=A,...,9=10)]
+    game_theoretic = np.zeros((2, 10, 10), dtype=int)
+
+    # --- No usable ace (hard totals: 12-21) ---
+    for p_idx in range(10):
+        player_sum = p_idx + 12
+        for d_idx in range(10):
+            dealer_card = d_idx + 1  # 1=Ace, 2-10
+            if player_sum >= 17:
+                action = 1  # stand
+            elif player_sum >= 13:
+                action = 1 if dealer_card in range(2, 7) else 0  # stand vs 2-6
+            elif player_sum == 12:
+                action = 1 if dealer_card in range(4, 7) else 0  # stand vs 4-6
+            else:
+                action = 0  # hit (shouldn't occur since min is 12)
+            game_theoretic[0, p_idx, d_idx] = action
+
+    # --- Usable ace (soft totals: soft 12 = A+12? No: player_sum 12-21 with usable ace)
+    # With a usable ace, player_sum is the total counting ace as 11.
+    # Soft 19+ -> stand; Soft 18 -> stand vs 2-8, hit vs 9,10,A; Soft 17 or less -> hit
+    for p_idx in range(10):
+        player_sum = p_idx + 12  # e.g. soft 12 means A+A which is unusual; soft 18 = A+7
+        for d_idx in range(10):
+            dealer_card = d_idx + 1
+            if player_sum >= 19:
+                action = 1  # stand
+            elif player_sum == 18:
+                # stand vs dealer 2-8, hit vs 9, 10, Ace
+                action = 1 if dealer_card in range(2, 9) else 0
+            else:
+                action = 0  # hit
+            game_theoretic[1, p_idx, d_idx] = action
+
+    # Compare and compute accuracy
+    correct = (policy_optimal == game_theoretic)
+    total_states = correct.size  # 200
+    pct_correct = correct.mean() * 100
+
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+
+    titles = ['No Usable Ace', 'Usable Ace']
+    for i, ace_label in enumerate(titles):
+        for col, (data, plot_title) in enumerate([
+            (policy_optimal[i], f'Agent Policy - {ace_label}'),
+            (correct[i],        f'Correctness vs Optimal - {ace_label}')
+        ]):
+            ax = axes[i][col]
+            for p_idx in range(10):
+                for d_idx in range(10):
+                    if col == 0:
+                        # Original policy plot: blue=stick, red=twist
+                        action = data[p_idx, d_idx]
+                        color = '#4A90D9' if action == 1 else '#E84040'
+                    else:
+                        # Correctness plot: green=correct, red=wrong
+                        color = '#5DBB63' if data[p_idx, d_idx] else '#E84040'
+                    rect = plt.Rectangle((d_idx, p_idx), 1, 1,
+                                         facecolor=color, edgecolor='black', linewidth=0.8)
+                    ax.add_patch(rect)
+
+            ax.set_xlim(0, 10)
+            ax.set_ylim(0, 10)
+            ax.set_xticks(np.arange(10) + 0.5)
+            ax.set_xticklabels(['A'] + list(range(2, 11)))
+            ax.set_yticks(np.arange(10) + 0.5)
+            ax.set_yticklabels(range(12, 22))
+            ax.set_xlabel('Dealer Showing')
+            ax.set_ylabel('Player Sum')
+            ax.set_title(plot_title)
+
+            from matplotlib.patches import Patch
+            if col == 0:
+                legend = [Patch(facecolor='#4A90D9', label='Stick'),
+                          Patch(facecolor='#E84040', label='Twist')]
+            else:
+                legend = [Patch(facecolor='#5DBB63', label='Correct'),
+                          Patch(facecolor='#E84040', label='Wrong')]
+            ax.legend(handles=legend, loc='upper right')
+
+    plt.suptitle(
+        f'GLIE Monte Carlo Control — Agent vs. Game-Theoretic Optimal\n'
+        f'Accuracy: {pct_correct:.1f}% ({int(correct.sum())}/{total_states} states correct)',
+        fontsize=13
+    )
     plt.tight_layout()
     plt.show()
