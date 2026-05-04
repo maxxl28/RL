@@ -14,6 +14,9 @@ def optimize_glie():
         # only 2 options in blackjack
         weights = [1-epsilon+epsilon/2, epsilon/2]
         flat_samples = np.random.choice(options, size=np.prod(shape), p=weights)
+
+        # fix: do not calculate the policy all at once
+ 
         policy = flat_samples.reshape(shape)
         states_visited, goal = play_episode(policy, Q)
         for state in states_visited:
